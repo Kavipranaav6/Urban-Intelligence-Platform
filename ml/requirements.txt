@@ -1,3 +1,4 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
 ultralytics>=8.0.0
 # Pinned to a stable, compatible CPU pair — torch 2.14.0+torchvision 0.29.0 is a
 # dev/nightly mismatch that causes RuntimeError: operator torchvision::nms does not exist

@@ -50,7 +50,7 @@ export async function analyzeUploadedVideoFrames(
   const reportId = `REP-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
 
   // 1. First attempt: Real Python YOLO ML Service (Edge Computer on port 8000 or custom ML_SERVICE_URL)
-  const mlUrl = process.env.ML_SERVICE_URL || 'http://127.0.0.1:8000';
+  const mlUrl = (process.env.ML_SERVICE_URL || 'http://127.0.0.1:8000').trim().replace(/\/+$/, '');
   try {
     const mlHealthRes = await fetch(`${mlUrl}/health`, { method: 'GET' });
     if (mlHealthRes.ok) {
@@ -67,7 +67,7 @@ export async function analyzeUploadedVideoFrames(
       }
     }
   } catch (pyErr) {
-    console.log('[videoAnalyzer] Python ML service unreachable, falling back:', (pyErr as Error).message);
+    console.log(`[videoAnalyzer] Python ML service unreachable at ${mlUrl}, falling back:`, (pyErr as Error).message);
   }
 
   const client = getAiClient();

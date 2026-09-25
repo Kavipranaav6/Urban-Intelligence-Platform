@@ -15,6 +15,7 @@ runs/
 weights/
 scratch/
 *.pt
+!ml/models/*.pt
 *.mp4
 *.pyc
 __pycache__/

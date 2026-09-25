@@ -798,6 +798,7 @@ async def analyze_frames(payload: dict):
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
-    print(f"[ML Server] Starting UrbanSense ML Server on http://127.0.0.1:{port}")
-    uvicorn.run("ml.api.ml_server:app", host="127.0.0.1", port=port, reload=False)
+    host = os.getenv("HOST", "0.0.0.0")
+    print(f"[ML Server] Starting UrbanSense ML Server on http://{host}:{port}")
+    uvicorn.run("ml.api.ml_server:app", host=host, port=port, reload=False)
 
