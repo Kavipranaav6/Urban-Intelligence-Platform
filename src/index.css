@@ -1,0 +1,141 @@
+@import "tailwindcss";
+@source "../index.html";
+@source "./**/*.{js,ts,jsx,tsx}";
+
+/* ── Light Theme Token Overrides ── */
+[data-theme="light"],
+html.light,
+body.light {
+  color-scheme: light;
+  --color-slate-950: #f8fafc; /* Main application background */
+  --color-slate-900: #ffffff; /* Card / Surface background */
+  --color-slate-850: #f1f5f9;
+  --color-slate-800: #e2e8f0; /* Card borders & subtle dividers */
+  --color-slate-700: #cbd5e1; /* Input borders / hover states */
+  --color-slate-600: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-400: #475569; /* Muted text */
+  --color-slate-300: #334155;
+  --color-slate-200: #1e293b;
+  --color-slate-100: #0f172a; /* High-contrast primary text */
+  --color-slate-50: #020617;
+}
+
+/* Light mode text contrast adaptation */
+[data-theme="light"] h1.text-white,
+[data-theme="light"] h2.text-white,
+[data-theme="light"] h3.text-white,
+[data-theme="light"] h4.text-white,
+[data-theme="light"] h5.text-white,
+[data-theme="light"] span.text-white:not([class*="bg-"]):not(button *):not(a *),
+[data-theme="light"] strong.text-white:not([class*="bg-"]):not(button *):not(a *),
+[data-theme="light"] div.text-white:not([class*="bg-"]):not(button *):not(a *),
+[data-theme="light"] p.text-white:not([class*="bg-"]):not(button *):not(a *) {
+  color: #0f172a !important;
+}
+
+/* Ensure inputs and selects are high contrast in light mode */
+[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="light"] select option {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+/* Navigation items in light mode */
+[data-theme="light"] aside nav a[class*="bg-cyan-950"] {
+  background-color: #e0f2fe !important;
+  color: #0284c7 !important;
+  border-color: #7dd3fc !important;
+  font-weight: 700 !important;
+}
+
+/* Light mode header and sidebar polish */
+[data-theme="light"] header {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-bottom-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] aside {
+  background-color: #ffffff !important;
+  border-right-color: #e2e8f0 !important;
+}
+
+/* Leaflet Dark Command Center Theme Adjustments */
+.leaflet-container {
+  background-color: #090d16 !important;
+  font-family: inherit;
+}
+
+/* Dark mode map tiles for command center aesthetic */
+.map-tiles-dark img.leaflet-tile {
+  filter: brightness(0.7) invert(1) contrast(3) hue-rotate(200deg) saturate(0.35) brightness(0.75);
+}
+
+/* Custom popup styling */
+.leaflet-popup-content-wrapper {
+  background: #0f172a !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(56, 189, 248, 0.25) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.7) !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.leaflet-popup-tip {
+  background: #0f172a !important;
+  border: 1px solid rgba(56, 189, 248, 0.25) !important;
+}
+
+/* Light mode Leaflet overrides */
+[data-theme="light"] .leaflet-container {
+  background-color: #f1f5f9 !important;
+}
+
+[data-theme="light"] .map-tiles-dark img.leaflet-tile {
+  filter: none !important;
+}
+
+[data-theme="light"] .leaflet-popup-content-wrapper {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+}
+
+[data-theme="light"] .leaflet-popup-tip {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+/* Radar pulse animation */
+@keyframes radar-ping {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  70% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.animate-radar {
+  animation: radar-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}

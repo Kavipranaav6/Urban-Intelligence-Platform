@@ -1,0 +1,17 @@
+ultralytics==8.4.146
+opencv-python-headless==5.0.0.93
+numpy
+fastapi
+uvicorn
+python-multipart
+starlette
+pydantic
+lap
+PyYAML
+requests
+psutil
+matplotlib
+tqdm
+kagglehub
+pytest
+httpx

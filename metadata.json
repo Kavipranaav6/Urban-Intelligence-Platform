@@ -1,0 +1,8 @@
+{
+  "name": "UrbanSense AI Platform",
+  "description": "AI-powered mobile urban intelligence platform turning transit buses into edge sensing units for road hazard, traffic, and safety surveillance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,63 @@
+# =============================================================================
+# UrbanSense AI - Inference & Analytics Configuration
+# =============================================================================
+
+# Stage 2: Vehicle Tracking & Traffic Analytics
+roi:
+  x_min: 0.10
+  y_min: 0.35
+  x_max: 0.90
+  y_max: 0.95
+
+density:
+  low_max: 5
+  medium_max: 12
+
+congestion:
+  low_max: 5
+  medium_max: 12
+
+trajectory:
+  max_length: 30
+
+# =============================================================================
+# Stage 3: Road & Infrastructure Hazard Detection
+# =============================================================================
+hazard:
+  # Path to trained hazard detection YOLO model (e.g. models/hazard_yolov8.pt).
+  model_path: "ml/models/hazard_yolov8.pt"
+
+  # Path to specialized pothole detection YOLO model
+  pothole_model_path: "ml/models/pothole_yolov8.pt"
+
+  # Sampling interval for hazard inference (runs every N frames).
+  # Does NOT affect vehicle tracking, which always reads consecutive frames for ByteTrack.
+  frame_interval: 5
+
+  # Minimum confidence threshold for hazard detections
+  # Tuned empirically: 0.20 gives best balance on road footage
+  # (0.15 = too many false positives, 0.25 = misses genuine low-conf potholes)
+  conf_threshold: 0.20
+
+  # Hazard ROI focusing on road surface and traffic signs.
+  # Configurable per bus because camera mounting position varies across fleets.
+  roi:
+    x_min: 0.05
+    y_min: 0.25
+    x_max: 0.95
+    y_max: 1.00
+
+  # Prototype severity calculation thresholds (area & confidence)
+  # NOTE: This is an image-space prioritization score, NOT an official civil-engineering
+  # pothole depth or certified structural rating.
+  severity:
+    high_area: 0.08          # Normalized bbox area >= 8% of frame
+    medium_area: 0.025       # Normalized bbox area >= 2.5% of frame
+    high_confidence: 0.85    # Detection confidence >= 85%
+    medium_confidence: 0.60  # Detection confidence >= 60%
+
+  # Temporal & spatial deduplication
+  # Prevents repeated incident tickets for the same defect visible across consecutive frames.
+  deduplication:
+    time_window_seconds: 5.0
+    distance_pixels: 100.0
