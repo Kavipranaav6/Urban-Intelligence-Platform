@@ -615,15 +615,10 @@ export const EdgeCameraFeed: React.FC<EdgeCameraFeedProps> = ({
           frameDataUrl
         });
 
-        // Update live processing panel stats incrementally
+        // Update live processing panel stats incrementally during frame extraction
         setLiveProcessingStats((prev) => ({
           ...prev,
-          framesProcessed: currentFrameIndex,
-          objectsDetected: Math.min(prev.objectsDetected + 2, 36),
-          vehicles: Math.max(1, prev.vehicles + 1),
-          potholes: prev.potholes,
-          pedestrians: prev.pedestrians,
-          anpr: targetTime >= 1.6 && targetTime <= 2.8 ? 1 : prev.anpr
+          framesProcessed: currentFrameIndex
         }));
 
         // Small yield so browser re-renders progress bar

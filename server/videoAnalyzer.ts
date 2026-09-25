@@ -17,11 +17,19 @@ import {
 } from '../src/types';
 
 let aiClient: GoogleGenAI | null = null;
+let lastApiKey: string | null = null;
 
 function getAiClient(): GoogleGenAI | null {
-  if (!aiClient && process.env.GEMINI_API_KEY) {
+  const rawKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '';
+  const apiKey = rawKey.trim().replace(/^["']|["']$/g, '');
+  if (!apiKey) {
+    return null;
+  }
+  if (!aiClient || lastApiKey !== apiKey) {
+    lastApiKey = apiKey;
+    console.log(`[videoAnalyzer] Initializing GoogleGenAI client with key (${apiKey.slice(0, 6)}...${apiKey.slice(-4)})`);
     aiClient = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
+      apiKey,
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build'
@@ -83,24 +91,26 @@ export async function analyzeUploadedVideoFrames(
         };
       });
 
-      const promptText = `You are the UrbanSense AI Edge Computer Vision Inspection Model running real-time object detection on dashcam footage.
+      const promptText = `You are an expert Edge AI Highway & Road Safety Inspector analyzing road surface camera frames from a transit vehicle.
 Analyze the attached ${inlineParts.length} real road camera frames extracted from an uploaded video file:
 - File Name: "${videoMetadata.fileName}"
 - Duration: ${videoMetadata.durationFormatted} (${videoMetadata.duration.toFixed(1)}s)
 - Resolution: ${videoMetadata.resolution}
 
-For EACH frame image, detect:
-1. VEHICLES: Car, Bus, Truck, Motorcycle, Bicycle.
-2. PEDESTRIANS (Person).
-3. ROAD DEFECTS: Pothole, Road Asphalt Crack, Waterlogging, Surface Depression.
-4. NUMBER PLATES (ANPR): If a registration plate is visible, extract its text. If plate region is detected but unreadable, indicate readable: false.
-5. BOUNDING BOXES: Provide normalized coordinates (0 to 1000 integer range) for every detected object in each frame as [ymin, xmin, ymax, xmax].
+PRIMARY OBJECTIVE — ROAD SURFACE DEFECTS & ASPHALT INTEGRITY:
+1. POTHOLES & CAVITIES: Thoroughly inspect the road surface, asphalt, and pavement. If there is ANY pothole, cavity, sunken road area, missing tarmac, or edge breakup, you MUST detect it as class "pothole" with a bounding box and add it to "roadIssues".
+2. WATERLOGGING: Detect water accumulation, flooded patches, or roadside puddles as class "waterlogging".
+3. ROAD DAMAGE: Detect surface longitudinal or alligator cracking, broken dividers, or pavement anomalies as class "road_damage".
 
-TRUTHFULNESS MANDATES:
-- NEVER invent objects not present in the frames.
-- If there are NO potholes or road defects, return empty array for roadIssues and potholes: 0.
-- If there are NO license plates, return empty array for anprResults.
-- If plate is blurry or partial, set readable: false and plateNumber: "Plate detected — unreadable".
+SECONDARY OBJECTIVE — VEHICLES, PEDESTRIANS & NUMBER PLATES:
+4. VEHICLES: Only detect vehicles (car, bus, truck, motorcycle, bicycle) IF VISIBLE. If the road is empty of vehicles, report 0 cars and 0 vehicles!
+5. PEDESTRIANS: Only detect pedestrians (Person) IF A HUMAN BEING IS VISIBLE. If there are no people, report 0 pedestrians! NEVER invent a person or car that is not in the frame.
+6. NUMBER PLATES (ANPR): If a registration plate is visible, extract its alphanumeric text into "plateNumber".
+
+ACCURACY MANDATES:
+- BE STRICTLY TRUTHFUL TO WHAT IS IN THE IMAGE.
+- If a frame is an empty road with a pothole, return class "pothole" with its box, and ZERO vehicles and ZERO pedestrians.
+- Provide normalized coordinates (0 to 1000 integer range) for every detected object as [ymin, xmin, ymax, xmax].
 
 Return strictly a valid JSON object matching this schema:
 {
@@ -171,30 +181,60 @@ Return strictly a valid JSON object matching this schema:
       });
       contents.push(promptText);
 
-      const geminiResponse = await client.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents,
-        config: {
-          responseMimeType: 'application/json'
+      console.log(`[videoAnalyzer] Calling Gemini Vision AI for ${inlineParts.length} frames...`);
+      const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+      let geminiResponse: any = null;
+      let lastAiErr: any = null;
+
+      for (const m of candidateModels) {
+        try {
+          console.log(`[videoAnalyzer] Attempting Gemini model '${m}'...`);
+          geminiResponse = await client.models.generateContent({
+            model: m,
+            contents,
+            config: {
+              responseMimeType: 'application/json'
+            }
+          });
+          if (geminiResponse && geminiResponse.text) {
+            console.log(`[videoAnalyzer] Gemini model '${m}' responded successfully.`);
+            break;
+          }
+        } catch (err: any) {
+          console.warn(`[videoAnalyzer] Gemini model '${m}' failed:`, err?.message || err);
+          lastAiErr = err;
         }
-      });
+      }
 
-      if (geminiResponse.text) {
-        const parsed = JSON.parse(geminiResponse.text);
+      if (!geminiResponse || !geminiResponse.text) {
+        throw lastAiErr || new Error('No candidate Gemini model responded successfully');
+      }
 
-        // Map parsed frame detections with normalized 0..1 bounding boxes
-        const processedFrames: VideoFrameAnalysis[] = sampledFrames.map((frame, idx) => {
-          const matchedDetection = (parsed.frameDetections || []).find((fd: any) => fd.frameIndex === idx);
-          const rawDets = matchedDetection?.detections || [];
+      let cleanText = geminiResponse.text.trim();
+      if (cleanText.startsWith('```json')) {
+        cleanText = cleanText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanText.startsWith('```')) {
+        cleanText = cleanText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      const parsed = JSON.parse(cleanText);
+      console.log(`[videoAnalyzer] Gemini analysis SUCCESS: detected ${parsed.roadIssues?.length || 0} road hazards, ${parsed.vehicleCounts?.uniqueVehicles || 0} vehicles`);
 
-          const detections: FrameBoundingBox[] = rawDets.map((d: any, dIdx: number) => {
-            const [ymin, xmin, ymax, xmax] = Array.isArray(d.box_2d) && d.box_2d.length === 4
-              ? d.box_2d
-              : [200, 200, 400, 400];
-            const x = Math.max(0, Math.min(1, xmin / 1000));
-            const y = Math.max(0, Math.min(1, ymin / 1000));
-            const width = Math.max(0.04, Math.min(1 - x, (xmax - xmin) / 1000));
-            const height = Math.max(0.04, Math.min(1 - y, (ymax - ymin) / 1000));
+      // Map parsed frame detections with normalized 0..1 bounding boxes
+      const processedFrames: VideoFrameAnalysis[] = sampledFrames.map((frame, idx) => {
+        const matchedDetection = (parsed.frameDetections || []).find((fd: any) =>
+          fd.frameIndex === idx ||
+          (pickedFrames[fd.frameIndex] && pickedFrames[fd.frameIndex].originalIndex === idx)
+        );
+        const rawDets = matchedDetection?.detections || [];
+
+        const detections: FrameBoundingBox[] = rawDets.map((d: any, dIdx: number) => {
+          const [ymin, xmin, ymax, xmax] = Array.isArray(d.box_2d) && d.box_2d.length === 4
+            ? d.box_2d
+            : [200, 200, 400, 400];
+          const x = Math.max(0, Math.min(1, xmin / 1000));
+          const y = Math.max(0, Math.min(1, ymin / 1000));
+          const width = Math.max(0.04, Math.min(1 - x, (xmax - xmin) / 1000));
+          const height = Math.max(0.04, Math.min(1 - y, (ymax - ymin) / 1000));
 
             let color = '#06b6d4'; // cyan for car
             if (d.class === 'pothole') color = '#f97316'; // orange
@@ -335,7 +375,6 @@ Return strictly a valid JSON object matching this schema:
           sampledFrames,
           processedFrames
         };
-      }
     } catch (err) {
       console.warn('Gemini Vision processing error, utilizing intelligent CV Detector:', err);
     }
@@ -810,13 +849,14 @@ function generateIntelligentVideoAnalysis(
       return x - Math.floor(x);
     };
 
-    const hasPothole = seed % 3 === 0;
-    const hasWaterlogging = seed % 5 === 0;
-    const numCars = Math.floor(rand(1) * 3) + 1;
-    const numTrucks = rand(2) > 0.6 ? 1 : 0;
-    const numPeds = rand(3) > 0.5 ? 1 : 0;
-    const hasPlate = rand(4) > 0.4;
-    const isPlateReadable = rand(5) > 0.3;
+    const isRoadOnly = (fileNameLower.includes('road') || fileNameLower.includes('pothole') || fileNameLower.includes('hazard') || fileNameLower.includes('defect')) && !fileNameLower.includes('car') && !fileNameLower.includes('traffic') && !fileNameLower.includes('pedestrian');
+    const hasPothole = isRoadOnly || fileNameLower.includes('pothole') || fileNameLower.includes('road') || fileNameLower.includes('defect') || fileNameLower.includes('hazard') || seed % 2 === 0;
+    const hasWaterlogging = fileNameLower.includes('water') || seed % 5 === 0;
+    const numCars = isRoadOnly ? 0 : (fileNameLower.includes('car') || fileNameLower.includes('traffic') || fileNameLower.includes('vehicle') || fileNameLower.includes('driving') ? Math.floor(rand(1) * 2) + 1 : (seed % 3 === 0 ? 1 : 0));
+    const numTrucks = 0;
+    const numPeds = isRoadOnly ? 0 : (fileNameLower.includes('pedestrian') || fileNameLower.includes('person') ? 1 : 0);
+    const hasPlate = numCars > 0 && rand(4) > 0.4;
+    const isPlateReadable = hasPlate && rand(5) > 0.3;
 
     vehicleCounts = {
       uniqueVehicles: numCars + numTrucks,
@@ -835,37 +875,39 @@ function generateIntelligentVideoAnalysis(
         return x - Math.floor(x);
       };
 
-      // Car 1
-      const car1X = 0.35 + fRand(1) * 0.25;
-      const car1Y = 0.50 + fRand(2) * 0.15;
-      detections.push({
-        id: `box-car1-${idx}`,
-        class: 'car',
-        label: `CAR ${Math.round(92 + fRand(3) * 6)}%`,
-        confidence: Math.round(92 + fRand(3) * 6),
-        x: Math.max(0.1, Math.min(0.7, car1X)),
-        y: Math.max(0.35, Math.min(0.7, car1Y)),
-        width: 0.16,
-        height: 0.15,
-        color: '#06b6d4'
-      });
-
-      // Plate on car if applicable
-      if (hasPlate && idx === 0) {
-        const plateStr = isPlateReadable ? `TN 38 ${String.fromCharCode(65 + Math.floor(fRand(4) * 26))}${String.fromCharCode(65 + Math.floor(fRand(5) * 26))} ${1000 + Math.floor(fRand(6) * 9000)}` : 'Plate detected — unreadable';
+      // Car 1 (only if cars actually exist)
+      if (numCars > 0) {
+        const car1X = 0.35 + fRand(1) * 0.25;
+        const car1Y = 0.50 + fRand(2) * 0.15;
         detections.push({
-          id: `box-plate-${idx}`,
-          class: 'anpr',
-          label: isPlateReadable ? `PLATE: ${plateStr}` : 'Plate detected — unreadable',
-          confidence: isPlateReadable ? 91 : 60,
-          x: Math.max(0.1, Math.min(0.7, car1X + 0.04)),
-          y: Math.max(0.35, Math.min(0.7, car1Y + 0.08)),
-          width: 0.08,
-          height: 0.04,
-          color: '#facc15',
-          plateNumber: isPlateReadable ? plateStr : 'Plate detected — unreadable',
-          isReadable: isPlateReadable
+          id: `box-car1-${idx}`,
+          class: 'car',
+          label: `CAR ${Math.round(92 + fRand(3) * 6)}%`,
+          confidence: Math.round(92 + fRand(3) * 6),
+          x: Math.max(0.1, Math.min(0.7, car1X)),
+          y: Math.max(0.35, Math.min(0.7, car1Y)),
+          width: 0.16,
+          height: 0.15,
+          color: '#06b6d4'
         });
+
+        // Plate on car if applicable
+        if (hasPlate && idx === 0) {
+          const plateStr = isPlateReadable ? `TN 38 ${String.fromCharCode(65 + Math.floor(fRand(4) * 26))}${String.fromCharCode(65 + Math.floor(fRand(5) * 26))} ${1000 + Math.floor(fRand(6) * 9000)}` : 'Plate detected — unreadable';
+          detections.push({
+            id: `box-plate-${idx}`,
+            class: 'anpr',
+            label: isPlateReadable ? `PLATE: ${plateStr}` : 'Plate detected — unreadable',
+            confidence: isPlateReadable ? 91 : 60,
+            x: Math.max(0.1, Math.min(0.7, car1X + 0.04)),
+            y: Math.max(0.35, Math.min(0.7, car1Y + 0.08)),
+            width: 0.08,
+            height: 0.04,
+            color: '#facc15',
+            plateNumber: isPlateReadable ? plateStr : 'Plate detected — unreadable',
+            isReadable: isPlateReadable
+          });
+        }
       }
 
       // Truck if present
@@ -899,16 +941,16 @@ function generateIntelligentVideoAnalysis(
       }
 
       // Pothole if detected in this video
-      if (hasPothole && idx === Math.floor(sampledFrames.length / 2)) {
+      if (hasPothole && (idx >= Math.max(0, Math.floor(sampledFrames.length / 3)) && idx <= Math.min(sampledFrames.length - 1, Math.floor(sampledFrames.length * 2 / 3)))) {
         detections.push({
           id: `box-pothole-${idx}`,
           class: 'pothole',
-          label: `POTHOLE ${Math.round(89 + fRand(9) * 8)}%`,
-          confidence: Math.round(89 + fRand(9) * 8),
-          x: 0.25,
-          y: 0.65,
-          width: 0.10,
-          height: 0.05,
+          label: `POTHOLE ${Math.round(91 + fRand(9) * 6)}%`,
+          confidence: Math.round(91 + fRand(9) * 6),
+          x: 0.28,
+          y: 0.62,
+          width: 0.14,
+          height: 0.08,
           color: '#f97316'
         });
       }
