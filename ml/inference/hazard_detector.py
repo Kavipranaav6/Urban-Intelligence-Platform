@@ -735,12 +735,14 @@ class HazardDetector:
                     "severity": severity,
                 })
 
-        # 2. Run Computer Vision Road Surface Waterlogging & Puddle Detection
-        try:
-            water_dets = detect_waterlogging_in_frame(frame, self.roi, self.severity_cfg)
-            all_detections.extend(water_dets)
-        except Exception as e:
-            print(f"[HazardDetector] Waterlogging detector notice: {e}")
+        # 2. Run Computer Vision Road Surface Waterlogging & Puddle Detection (Opt-in only; disabled by default to eliminate false positives on asphalt shadows/tar repairs)
+        enable_cv_waterlogging = self.config.get("enable_cv_waterlogging", False) or os.getenv("ENABLE_CV_WATERLOGGING", "false").lower() == "true"
+        if enable_cv_waterlogging:
+            try:
+                water_dets = detect_waterlogging_in_frame(frame, self.roi, self.severity_cfg)
+                all_detections.extend(water_dets)
+            except Exception as e:
+                print(f"[HazardDetector] Waterlogging detector notice: {e}")
 
         # 3. Apply IoU Non-Maximum Suppression to remove duplicates across models
         deduped = apply_hazard_nms(all_detections, iou_threshold=0.45)

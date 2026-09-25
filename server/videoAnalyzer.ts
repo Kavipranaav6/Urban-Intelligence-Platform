@@ -851,7 +851,7 @@ function generateIntelligentVideoAnalysis(
 
     const isRoadOnly = (fileNameLower.includes('road') || fileNameLower.includes('pothole') || fileNameLower.includes('hazard') || fileNameLower.includes('defect')) && !fileNameLower.includes('car') && !fileNameLower.includes('traffic') && !fileNameLower.includes('pedestrian');
     const hasPothole = isRoadOnly || fileNameLower.includes('pothole') || fileNameLower.includes('road') || fileNameLower.includes('defect') || fileNameLower.includes('hazard') || seed % 2 === 0;
-    const hasWaterlogging = fileNameLower.includes('water') || seed % 5 === 0;
+    const hasWaterlogging = fileNameLower.includes('water') || fileNameLower.includes('flood') || fileNameLower.includes('puddle');
     const numCars = isRoadOnly ? 0 : (fileNameLower.includes('car') || fileNameLower.includes('traffic') || fileNameLower.includes('vehicle') || fileNameLower.includes('driving') ? Math.floor(rand(1) * 2) + 1 : (seed % 3 === 0 ? 1 : 0));
     const numTrucks = 0;
     const numPeds = isRoadOnly ? 0 : (fileNameLower.includes('pedestrian') || fileNameLower.includes('person') ? 1 : 0);
