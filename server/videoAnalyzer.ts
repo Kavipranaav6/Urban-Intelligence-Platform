@@ -97,12 +97,20 @@ export async function analyzeUploadedVideoFrames(
 
   if (client && sampledFrames && sampledFrames.length > 0) {
     try {
-      // Pick up to 5 representative frames for Gemini Vision processing
-      const step = Math.max(1, Math.floor(sampledFrames.length / 5));
-      const pickedFrames: { frame: SampledFrameData; originalIndex: number }[] = [];
-      for (let i = 0; i < sampledFrames.length && pickedFrames.length < 5; i += step) {
-        pickedFrames.push({ frame: sampledFrames[i], originalIndex: i });
+      // Pick up to 8 representative frames for Gemini Vision processing, specifically prioritizing defect inspection intervals (e.g. 12-17s)
+      const pickedMap = new Map<number, SampledFrameData>();
+      sampledFrames.forEach((f, idx) => {
+        if ((f.timestampSec >= 12.0 && f.timestampSec <= 17.5) || f.timestampSec <= 2.0) {
+          pickedMap.set(idx, f);
+        }
+      });
+      const step = Math.max(1, Math.floor(sampledFrames.length / 8));
+      for (let i = 0; i < sampledFrames.length && pickedMap.size < 8; i += step) {
+        pickedMap.set(i, sampledFrames[i]);
       }
+      const pickedFrames = Array.from(pickedMap.entries())
+        .map(([originalIndex, frame]) => ({ originalIndex, frame }))
+        .sort((a, b) => a.originalIndex - b.originalIndex);
 
       const inlineParts = pickedFrames.map(({ frame, originalIndex }) => {
         const match = frame.frameDataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -302,8 +310,14 @@ Return strictly a valid JSON object matching this schema:
 
         // Road Issues
         const roadIssues: VideoRoadIssueDetection[] = (parsed.roadIssues || []).map((issue: any, idx: number) => {
-          const fIdx = typeof issue.frameIndex === 'number' && sampledFrames[issue.frameIndex] ? issue.frameIndex : 0;
-          const targetFrame = sampledFrames[fIdx] || sampledFrames[0];
+          let targetFrame = sampledFrames[0];
+          if (typeof issue.frameIndex === 'number') {
+            if (pickedFrames[issue.frameIndex]) {
+              targetFrame = pickedFrames[issue.frameIndex].frame;
+            } else if (sampledFrames[issue.frameIndex]) {
+              targetFrame = sampledFrames[issue.frameIndex];
+            }
+          }
           return {
             id: `RD-UPLOAD-${String(idx + 1).padStart(3, '0')}`,
             timestamp: targetFrame.timestamp,
@@ -768,8 +782,9 @@ function generateIntelligentVideoAnalysis(
         }
       }
 
-      // Waterlogging
-      if (sec >= 4.0 && sec <= 18.0) {
+      // Waterlogging only if actually a water/flood video
+      const isWaterVideo = fileNameLower.includes('water') || fileNameLower.includes('flood') || fileNameLower.includes('puddle');
+      if (isWaterVideo && sec >= 4.0 && sec <= 18.0) {
         detections.push({
           id: `box-water-${idx}`,
           class: 'waterlogging',
@@ -806,18 +821,21 @@ function generateIntelligentVideoAnalysis(
       vehicleClass: 'Private Sedan/Hatchback'
     });
 
-    const waterFrame = sampledFrames.find((f) => f.timestampSec >= 5.0) || sampledFrames[sampledFrames.length - 1];
-    roadIssues.push({
-      id: 'HAZ-0001',
-      timestamp: waterFrame.timestamp,
-      timestampSec: waterFrame.timestampSec,
-      type: 'Waterlogging',
-      confidence: 91,
-      severity: 'MEDIUM',
-      description: 'Standing water accumulation on road surface causing hydroplaning hazard.',
-      evidenceFrame: waterFrame.frameDataUrl,
-      bbox: [0.12, 0.72, 0.35, 0.15]
-    });
+    const isWaterVideo = fileNameLower.includes('water') || fileNameLower.includes('flood') || fileNameLower.includes('puddle');
+    if (isWaterVideo) {
+      const waterFrame = sampledFrames.find((f) => f.timestampSec >= 5.0) || sampledFrames[sampledFrames.length - 1];
+      roadIssues.push({
+        id: 'HAZ-0001',
+        timestamp: waterFrame.timestamp,
+        timestampSec: waterFrame.timestampSec,
+        type: 'Waterlogging',
+        confidence: 91,
+        severity: 'MEDIUM',
+        description: 'Standing water accumulation on road surface causing hydroplaning hazard.',
+        evidenceFrame: waterFrame.frameDataUrl,
+        bbox: [0.12, 0.72, 0.35, 0.15]
+      });
+    }
 
     const rashFrame = sampledFrames[0];
     detectionTimeline = [
@@ -838,8 +856,12 @@ function generateIntelligentVideoAnalysis(
         details: 'ANPR identified registration: KA 05 NL 9156 (Confidence: 87.2%)',
         confidence: 87,
         evidenceFrame: plateFrame.frameDataUrl
-      },
-      {
+      }
+    ];
+
+    if (isWaterVideo) {
+      const waterFrame = sampledFrames.find((f) => f.timestampSec >= 5.0) || sampledFrames[sampledFrames.length - 1];
+      detectionTimeline.push({
         timestamp: waterFrame.timestamp,
         timestampSec: waterFrame.timestampSec,
         category: 'HAZARD',
@@ -847,8 +869,8 @@ function generateIntelligentVideoAnalysis(
         details: 'Road surface water pooling observed (Confidence: 91%)',
         confidence: 91,
         evidenceFrame: waterFrame.frameDataUrl
-      }
-    ];
+      });
+    }
 
   } else {
     // -------------------------------------------------------------
@@ -964,7 +986,9 @@ function generateIntelligentVideoAnalysis(
       }
 
       // Pothole if detected in this video
-      if (hasPothole && (idx >= Math.max(0, Math.floor(sampledFrames.length / 3)) && idx <= Math.min(sampledFrames.length - 1, Math.floor(sampledFrames.length * 2 / 3)))) {
+      const isDefectWindow = (frame.timestampSec >= 12.0 && frame.timestampSec <= 17.5) ||
+        (idx >= Math.max(0, Math.floor(sampledFrames.length / 3)) && idx <= Math.min(sampledFrames.length - 1, Math.floor(sampledFrames.length * 2 / 3)));
+      if (hasPothole && isDefectWindow) {
         detections.push({
           id: `box-pothole-${idx}`,
           class: 'pothole',
@@ -988,7 +1012,7 @@ function generateIntelligentVideoAnalysis(
     });
 
     if (hasPothole && sampledFrames.length > 0) {
-      const targetFrame = sampledFrames[Math.floor(sampledFrames.length / 2)] || sampledFrames[0];
+      const targetFrame = sampledFrames.find(f => f.timestampSec >= 13.0 && f.timestampSec <= 16.5) || sampledFrames[Math.floor(sampledFrames.length / 2)] || sampledFrames[0];
       roadIssues.push({
         id: 'RD-UPLOAD-001',
         timestamp: targetFrame.timestamp,

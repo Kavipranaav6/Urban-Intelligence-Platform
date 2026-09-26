@@ -592,21 +592,38 @@ class HazardDetector:
             print("[HazardDetector] Initialized with custom model instance.")
             return
 
+        # Resolve paths relative to this file's location so loading works regardless of CWD
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        ml_dir = os.path.dirname(current_dir)
+        root_dir = os.path.dirname(ml_dir)
+
         # Explicit model_path provided by caller
         if model_path is not None:
-            self.model_path = model_path
-            if os.path.exists(model_path):
+            resolved_explicit = model_path
+            if not os.path.exists(resolved_explicit):
+                alt_paths = [
+                    os.path.join(ml_dir, "models", os.path.basename(model_path)),
+                    os.path.join(root_dir, "ml", "models", os.path.basename(model_path)),
+                    os.path.join(current_dir, "..", "models", os.path.basename(model_path))
+                ]
+                for alt in alt_paths:
+                    if os.path.exists(alt):
+                        resolved_explicit = alt
+                        break
+
+            self.model_path = resolved_explicit
+            if os.path.exists(resolved_explicit):
                 try:
                     import torch
                     from ultralytics import YOLO
                     self.device = "cuda:0" if (hasattr(torch, 'cuda') and torch.cuda.is_available()) else "cpu"
-                    loaded = YOLO(model_path)
+                    loaded = YOLO(resolved_explicit)
                     self.models.append(loaded)
                     self.model = loaded
                     self.is_available = True
-                    print(f"[HazardDetector] Loaded model from '{model_path}' on {self.device}.")
+                    print(f"[HazardDetector] Loaded model from '{resolved_explicit}' on {self.device}.")
                 except Exception as e:
-                    print(f"[HazardDetector] Failed to load model at '{model_path}': {e}")
+                    print(f"[HazardDetector] Failed to load model at '{resolved_explicit}': {e}")
                     self.is_available = False
             else:
                 self.is_available = False
@@ -618,30 +635,38 @@ class HazardDetector:
         configured_path = self.config.get("model_path", "ml/models/hazard_yolov8.pt")
         candidate_paths = [
             configured_path,
+            os.path.join(ml_dir, "models", "hazard_yolov8.pt"),
+            os.path.join(ml_dir, "models", "pothole_yolov8.pt"),
+            os.path.join(root_dir, "ml", "models", "hazard_yolov8.pt"),
+            os.path.join(root_dir, "ml", "models", "pothole_yolov8.pt"),
             "ml/models/hazard_yolov8.pt",
             "ml/models/pothole_yolov8.pt",
+            "models/hazard_yolov8.pt",
+            "models/pothole_yolov8.pt",
         ]
         seen_paths = set()
 
         for p in candidate_paths:
-            if not p or p in seen_paths:
+            if not p or not os.path.exists(p):
                 continue
-            seen_paths.add(p)
-            if os.path.exists(p):
-                try:
-                    import torch
-                    from ultralytics import YOLO
-                    self.device = "cuda:0" if (hasattr(torch, 'cuda') and torch.cuda.is_available()) else "cpu"
-                    loaded = YOLO(p)
-                    self.models.append(loaded)
-                    print(f"[HazardDetector] Loaded hazard model weights from '{p}' on {self.device}.")
-                except Exception as e:
-                    print(f"[HazardDetector] Failed to load model at '{p}': {e}")
+            norm_p = os.path.normcase(os.path.abspath(p))
+            if norm_p in seen_paths:
+                continue
+            seen_paths.add(norm_p)
+            try:
+                import torch
+                from ultralytics import YOLO
+                self.device = "cuda:0" if (hasattr(torch, 'cuda') and torch.cuda.is_available()) else "cpu"
+                loaded = YOLO(p)
+                self.models.append(loaded)
+                print(f"[HazardDetector] Loaded hazard model weights from '{p}' on {self.device}.")
+            except Exception as e:
+                print(f"[HazardDetector] Failed to load model at '{p}': {e}")
 
         if self.models:
             self.model = self.models[0]
             self.is_available = True
-            self.model_path = configured_path if os.path.exists(configured_path) else getattr(self.models[0], "model_name", candidate_paths[0])
+            self.model_path = getattr(self.models[0], "model_name", candidate_paths[0])
         else:
             self.model = None
             self.model_path = configured_path

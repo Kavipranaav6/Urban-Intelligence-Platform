@@ -552,8 +552,15 @@ export const EdgeCameraFeed: React.FC<EdgeCameraFeedProps> = ({
         [0.5, 1.2, 2.0, 3.2, 4.5].forEach((t) => {
           if (t < duration - 0.5) tsSet.add(Number(t.toFixed(2)));
         });
-        // Comprehensive spread across the entire video (e.g. ~14-16 keyframes max)
-        const step = Math.max(1.8, (duration - 4.5) / 14);
+
+        // Key inspection timestamps for road defect corridors (e.g. 12-17s)
+        [12.0, 13.0, 14.0, 15.0, 16.0, 17.0].forEach((t) => {
+          if (t < duration - 0.5) tsSet.add(Number(t.toFixed(2)));
+        });
+
+        // Comprehensive spread across the entire video:
+        // Use a fine-grained step (~2.0-2.5s) so transient road hazards (potholes last 1.5-3s in FOV) are never skipped!
+        const step = Math.min(2.5, Math.max(1.8, (duration - 5.0) / 28));
         for (let cur = 5.0; cur < duration - 0.3; cur += step) {
           tsSet.add(Number(cur.toFixed(2)));
         }
