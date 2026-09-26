@@ -654,10 +654,10 @@ export const MultiVideoCongestionDashboard: React.FC = () => {
             <button
               onClick={() => globalCsvInputRef.current?.click()}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-mono font-semibold transition shadow-sm"
-              title="Attach a single Location CSV trace to all 4 video slots"
+              title="Attach a single GPS CSV trace to all 4 video slots"
             >
               <FileText className="w-3.5 h-3.5 text-amber-400" />
-              <span>Attach Location CSV (All Slots)</span>
+              <span>Attach GPS CSV (All Slots)</span>
             </button>
 
             <button
@@ -777,7 +777,7 @@ export const MultiVideoCongestionDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* GPS CSV Telemetry Attachment Control */}
+              {/* GPS CSV Telemetry Attachment Control for Individual Slot */}
               <div className="px-3.5 py-1.5 bg-slate-950/70 border-b border-slate-800 flex items-center justify-between text-xs font-mono">
                 <input
                   type="file"
@@ -792,35 +792,47 @@ export const MultiVideoCongestionDashboard: React.FC = () => {
                 {slot.gpsCsvFile ? (
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-1.5 text-emerald-400">
-                      <MapPin className="w-3.5 h-3.5 shrink-0" />
-                      <span className="font-bold text-[11px] truncate max-w-[210px]" title={slot.gpsCsvFile.name}>
+                      <FileText className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                      <span className="font-bold text-[11px] truncate max-w-[190px]" title={slot.gpsCsvFile.name}>
                         {slot.gpsCsvFile.name}
                       </span>
                       <span className="text-[10px] text-slate-500">
                         ({(slot.gpsCsvFile.size / 1024).toFixed(1)} KB)
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSlotCsv(slot.slotId)}
-                      className="text-slate-400 hover:text-rose-400 text-[10px] font-bold px-1.5 py-0.5 rounded hover:bg-rose-950/40 border border-transparent hover:border-rose-800/40 transition cursor-pointer"
-                      title="Remove attached GPS CSV"
-                    >
-                      Remove ✕
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => slotCsvInputs[index].current?.click()}
+                        className="text-cyan-400 hover:text-cyan-300 text-[10px] font-semibold px-1.5 py-0.5 rounded hover:bg-slate-800 transition cursor-pointer"
+                        title={`Replace GPS CSV for Slot ${slot.slotId}`}
+                      >
+                        Replace
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSlotCsv(slot.slotId)}
+                        className="text-slate-400 hover:text-rose-400 text-[10px] font-bold px-1.5 py-0.5 rounded hover:bg-rose-950/40 border border-transparent hover:border-rose-800/40 transition cursor-pointer"
+                        title="Remove attached GPS CSV"
+                      >
+                        Remove ✕
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between w-full">
-                    <span className="text-slate-500 text-[11px] flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-slate-600" />
+                    <span className="text-slate-400 text-[11px] flex items-center gap-1">
+                      <FileText className="w-3 h-3 text-slate-500" />
                       GPS: Default corridor
                     </span>
                     <button
                       type="button"
                       onClick={() => slotCsvInputs[index].current?.click()}
-                      className="text-cyan-400 hover:text-cyan-300 text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-800/80 transition cursor-pointer"
+                      className="flex items-center gap-1 text-amber-300 hover:text-amber-200 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-950/70 hover:bg-amber-900 border border-amber-800/80 transition cursor-pointer"
+                      title={`Attach GPS telemetry CSV for Slot ${slot.slotId} (${slot.assignedBusId})`}
                     >
-                      + Attach Location CSV
+                      <FileText className="w-3 h-3 text-amber-400" />
+                      <span>Attach GPS CSV</span>
                     </button>
                   </div>
                 )}
@@ -893,12 +905,28 @@ export const MultiVideoCongestionDashboard: React.FC = () => {
                       className="hidden"
                     />
 
-                    <button
-                      onClick={() => slotFileInputs[index].current?.click()}
-                      className="px-3 py-1.5 rounded-lg bg-cyan-950 text-cyan-300 hover:bg-cyan-900 border border-cyan-800 text-xs font-mono font-semibold transition"
-                    >
-                      Upload Video File
-                    </button>
+                    <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
+                      <button
+                        onClick={() => slotFileInputs[index].current?.click()}
+                        className="px-3 py-1.5 rounded-lg bg-cyan-950 text-cyan-300 hover:bg-cyan-900 border border-cyan-800 text-xs font-mono font-semibold transition flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Video className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Upload Video</span>
+                      </button>
+
+                      <button
+                        onClick={() => slotCsvInputs[index].current?.click()}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition flex items-center gap-1.5 border shadow-sm cursor-pointer ${
+                          slot.gpsCsvFile
+                            ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
+                            : 'bg-slate-900 text-amber-300 hover:bg-slate-800 border-slate-700 hover:border-amber-500'
+                        }`}
+                        title={`Attach GPS telemetry CSV for Slot ${slot.slotId}`}
+                      >
+                        <FileText className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{slot.gpsCsvFile ? 'GPS CSV Attached' : 'Attach GPS CSV'}</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 

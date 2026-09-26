@@ -885,16 +885,16 @@ export const EdgeCameraFeed: React.FC<EdgeCameraFeedProps> = ({
             <span>Upload Road Video</span>
           </button>
 
-          {/* Optional GPS CSV Input */}
+          {/* GPS CSV Input */}
           {!uploadedGpsFile ? (
             <button
               onClick={() => gpsFileInputRef.current?.click()}
               disabled={isProcessingVideo}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 border border-dashed border-slate-600 hover:border-cyan-500 transition"
-              title="Attach optional GPS telemetry CSV (timestamp_sec, latitude, longitude)"
+              title="Attach GPS telemetry CSV (timestamp_sec, latitude, longitude)"
             >
               <FileText className="w-3.5 h-3.5 text-amber-400" />
-              <span>Attach GPS CSV (Optional)</span>
+              <span>Attach GPS CSV</span>
             </button>
           ) : (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-700 text-xs font-mono text-emerald-300 shadow-sm">
