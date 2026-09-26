@@ -57,7 +57,7 @@ UrbanSense AI turns public transit buses into mobile urban surveillance and inte
    ```
 4. Run the ML server:
    ```bash
-   python -m ml.api.ml_server
+   python -m uvicorn ml.api.ml_server:app --port 8000
    ```
    *Expected Output*: `[ML Server] Starting UrbanSense ML Server on http://127.0.0.1:8000`
 

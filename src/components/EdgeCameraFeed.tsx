@@ -532,9 +532,9 @@ export const EdgeCameraFeed: React.FC<EdgeCameraFeedProps> = ({
       const seconds = Math.floor(duration % 60);
       const durationFormatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
-      // High-resolution canvas for sharp ANPR OCR and hazard detection
-      const canvasWidth = 1280;
-      const canvasHeight = 720;
+      // Fast, lightweight high-fidelity canvas (854x480) optimized for fast edge transmission
+      const canvasWidth = 854;
+      const canvasHeight = 480;
       const offscreenCanvas = document.createElement('canvas');
       offscreenCanvas.width = canvasWidth;
       offscreenCanvas.height = canvasHeight;
@@ -552,8 +552,8 @@ export const EdgeCameraFeed: React.FC<EdgeCameraFeedProps> = ({
         [0.5, 1.2, 2.0, 3.2, 4.5].forEach((t) => {
           if (t < duration - 0.5) tsSet.add(Number(t.toFixed(2)));
         });
-        // Comprehensive spread across the entire video (e.g. 24-28 samples, ~2-3s interval)
-        const step = Math.max(1.8, (duration - 4.5) / 24);
+        // Comprehensive spread across the entire video (e.g. ~14-16 keyframes max)
+        const step = Math.max(1.8, (duration - 4.5) / 14);
         for (let cur = 5.0; cur < duration - 0.3; cur += step) {
           tsSet.add(Number(cur.toFixed(2)));
         }
@@ -600,9 +600,9 @@ export const EdgeCameraFeed: React.FC<EdgeCameraFeedProps> = ({
           video.currentTime = targetTime;
         });
 
-        // Draw frame onto high-resolution offscreen canvas
+        // Draw frame onto offscreen canvas with compact 0.75 JPEG compression
         offscreenCtx.drawImage(video, 0, 0, canvasWidth, canvasHeight);
-        const frameDataUrl = offscreenCanvas.toDataURL('image/jpeg', 0.85);
+        const frameDataUrl = offscreenCanvas.toDataURL('image/jpeg', 0.75);
 
         const frameMin = Math.floor(targetTime / 60);
         const frameSec = Math.floor(targetTime % 60);

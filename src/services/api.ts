@@ -223,7 +223,17 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ videoMetadata, sampledFrames, busId, gpsCsvContent })
     });
-    if (!res.ok) throw new Error('Failed to analyze uploaded video frames');
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      let errorMsg = `HTTP ${res.status}: Failed to analyze video frames`;
+      try {
+        const parsed = JSON.parse(errText);
+        if (parsed.error || parsed.message) errorMsg = parsed.error || parsed.message;
+      } catch (_) {
+        if (errText && errText.length < 200) errorMsg = errText;
+      }
+      throw new Error(errorMsg);
+    }
     return res.json();
   },
 

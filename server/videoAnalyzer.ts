@@ -52,22 +52,45 @@ export async function analyzeUploadedVideoFrames(
   // 1. First attempt: Real Python YOLO ML Service (Edge Computer on port 8000 or custom ML_SERVICE_URL)
   const mlUrl = (process.env.ML_SERVICE_URL || 'http://127.0.0.1:8000').trim().replace(/\/+$/, '');
   try {
-    const mlHealthRes = await fetch(`${mlUrl}/health`, { method: 'GET' });
-    if (mlHealthRes.ok) {
-      console.log(`[videoAnalyzer] Python Edge ML Service detected at ${mlUrl}. Running REAL YOLOv8 inference...`);
-      const mlRes = await fetch(`${mlUrl}/analyze-frames`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoMetadata, sampledFrames, busId, gpsTrace })
-      });
-      if (mlRes.ok) {
+    const isCloudUrl = !mlUrl.includes('127.0.0.1') && !mlUrl.includes('localhost');
+    console.log(`[videoAnalyzer] Checking Python ML Service health at ${mlUrl}...`);
+    const healthController = new AbortController();
+    const healthTimeout = setTimeout(() => healthController.abort(), isCloudUrl ? 35000 : 5000);
+    let mlHealthRes;
+    try {
+      mlHealthRes = await fetch(`${mlUrl}/health`, { method: 'GET', signal: healthController.signal });
+    } finally {
+      clearTimeout(healthTimeout);
+    }
+
+    if (mlHealthRes && mlHealthRes.ok) {
+      console.log(`[videoAnalyzer] Python Edge ML Service online at ${mlUrl}. Dispatching ${sampledFrames.length} frames...`);
+      const analyzeController = new AbortController();
+      const analyzeTimeout = setTimeout(() => analyzeController.abort(), 60000);
+      let mlRes;
+      try {
+        mlRes = await fetch(`${mlUrl}/analyze-frames`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoMetadata, sampledFrames, busId, gpsTrace }),
+          signal: analyzeController.signal
+        });
+      } finally {
+        clearTimeout(analyzeTimeout);
+      }
+
+      if (mlRes && mlRes.ok) {
         const pyReport: UploadedVideoReport = await mlRes.json();
         console.log(`[videoAnalyzer] Successfully completed REAL YOLO inference (${pyReport.inferenceEngine})`);
         return pyReport;
+      } else if (mlRes) {
+        console.warn(`[videoAnalyzer] Python ML service returned status ${mlRes.status}`);
       }
+    } else {
+      console.log(`[videoAnalyzer] Python ML service health returned status: ${mlHealthRes?.status}`);
     }
-  } catch (pyErr) {
-    console.log(`[videoAnalyzer] Python ML service unreachable at ${mlUrl}, falling back:`, (pyErr as Error).message);
+  } catch (pyErr: any) {
+    console.log(`[videoAnalyzer] Python ML service unreachable at ${mlUrl}, falling back:`, pyErr?.message || pyErr);
   }
 
   const client = getAiClient();

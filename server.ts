@@ -11,8 +11,9 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-  // Standard express json middleware
-  app.use(express.json({ limit: '15mb' }));
+  // Standard express json middleware with 50MB payload headroom for video frame analysis
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // API Health Check
   app.get('/api/health', (req, res) => {
